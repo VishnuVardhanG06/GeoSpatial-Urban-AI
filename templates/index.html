@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UrbanAI | Urban Growth Intelligence</title>
+    <meta name="description" content="Visualize urban expansion using Landsat satellite imagery and advanced remote sensing algorithms.">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- ═══════════════════  SIDEBAR  ═══════════════════ -->
+    <aside class="sidebar">
+
+        <div class="brand">
+            <div class="brand-icon">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M9 22V12H15V22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="brand-text">
+                <h1>URBAN<span class="accent">AI</span></h1>
+                <p>Growth Intelligence</p>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Controls -->
+        <div class="control-group">
+            <label class="control-label">Target City</label>
+            <div class="select-wrapper">
+                <select id="city-select">
+                    {% for city in cities %}
+                        <option value="{{ city }}">{{ city }}</option>
+                    {% endfor %}
+                </select>
+                <svg class="select-arrow" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+        </div>
+
+        <div class="control-row">
+            <div class="control-group half">
+                <label class="control-label">Past Era</label>
+                <div class="select-wrapper">
+                    <select id="start-year">
+                        <option value="2000">2000</option>
+                        <option value="2005">2005</option>
+                        <option value="2010">2010</option>
+                        <option value="2015">2015</option>
+                        <option value="2018" selected>2018</option>
+                    </select>
+                    <svg class="select-arrow" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+            </div>
+            <div class="control-group half">
+                <label class="control-label">Modern Era</label>
+                <div class="select-wrapper">
+                    <select id="end-year">
+                        <option value="2020">2020</option>
+                        <option value="2021">2021</option>
+                        <option value="2022">2022</option>
+                        <option value="2023">2023</option>
+                        <option value="2024">2024</option>
+                        <option value="2025" selected>2025</option>
+                    </select>
+                    <svg class="select-arrow" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+            </div>
+        </div>
+
+        <button id="scan-btn" onclick="runAnalysis()">
+            <span id="btn-text">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                INITIATE SCAN
+            </span>
+            <span id="btn-loader" class="hidden">
+                <span class="spinner"></span> PROCESSING...
+            </span>
+        </button>
+
+        <div id="status-bar" class="status-bar standby">
+            <span class="status-dot"></span>
+            <span id="status-text">System Standby</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Statistics Panel -->
+        <div class="stats-panel" id="stats-panel">
+            <div class="stats-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Growth Analytics
+            </div>
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card" id="stat-start">
+                    <div class="stat-label">PAST URBAN</div>
+                    <div class="stat-value">—</div>
+                    <div class="stat-unit">km²</div>
+                </div>
+                <div class="stat-card" id="stat-end">
+                    <div class="stat-label">MODERN URBAN</div>
+                    <div class="stat-value">—</div>
+                    <div class="stat-unit">km²</div>
+                </div>
+                <div class="stat-card highlight" id="stat-growth">
+                    <div class="stat-label">NEW GROWTH</div>
+                    <div class="stat-value">—</div>
+                    <div class="stat-unit">km²</div>
+                </div>
+                <div class="stat-card accent-card" id="stat-pct">
+                    <div class="stat-label">EXPANSION</div>
+                    <div class="stat-value">—</div>
+                    <div class="stat-unit">%</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-title">MAP LEGEND</div>
+            <div class="legend-item">
+                <span class="swatch stable"></span>
+                <div>
+                    <div class="legend-label">Existing Urban</div>
+                    <div class="legend-desc">Buildings present in past era</div>
+                </div>
+            </div>
+            <div class="legend-item">
+                <span class="swatch growth"></span>
+                <div>
+                    <div class="legend-label">New Growth</div>
+                    <div class="legend-desc">Expansion in modern era</div>
+                </div>
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- ═══════════════════  MAP AREA  ═══════════════════ -->
+    <main class="map-area">
+
+        <!-- Location Scanner HUD -->
+        <div id="location-hud">
+            <div class="hud-icon">
+                <span class="pulse-ring"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            </div>
+            <span id="place-name">SCANNING SECTOR...</span>
+        </div>
+
+        <!-- Map Panels -->
+        <div class="map-panel" id="map-left-panel">
+            <div class="map-badge past-badge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span id="label-past">PAST</span>
+            </div>
+            <div id="map-left"></div>
+            <div class="crosshair-overlay">
+                <div class="ch-v"></div>
+                <div class="ch-h"></div>
+                <div class="ch-dot"></div>
+            </div>
+        </div>
+
+        <div class="map-divider">
+            <div class="divider-label">VS</div>
+        </div>
+
+        <div class="map-panel" id="map-right-panel">
+            <div class="map-badge live-badge">
+                <span class="live-dot"></span>
+                <span id="label-modern">MODERN</span>
+            </div>
+            <div id="map-right"></div>
+            <div class="crosshair-overlay">
+                <div class="ch-v"></div>
+                <div class="ch-h"></div>
+                <div class="ch-dot"></div>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
